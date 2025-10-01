@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>🦖 The 2i Dino Survival Game (by senuja)</title>
+  <title>🦖 The 2i Dino Survival Game</title>
   <style>
     body {
       margin: 0;
@@ -9,15 +9,20 @@
       display: flex;
       flex-direction: column;
       align-items: center;
+      background: #f1f1f1;
+      overflow-x: hidden;
     }
     #gameContainer {
       position: relative;
       border: 3px solid black;
       background: #e6e6e6;
-      margin-top: 10px;
+      margin-top: 0;
+      width: 100%;
     }
     #gameCanvas {
       display: block;
+      width: 100vw;
+      height: 60vh;
       background: linear-gradient(#aee1f9, #f1f1f1);
     }
     #overlay {
@@ -34,9 +39,9 @@
     }
     #leaderboard {
       width: 100%;
-      max-width: 600px;
+      max-width: 700px;
       border: 3px solid black;
-      margin-top: 10px;
+      margin: 10px 0;
       background: #fdfdfd;
     }
     #leaderboard h2 {
@@ -63,14 +68,19 @@
     #scoresList li strong {
       color: darkblue;
     }
-    @media (max-width: 700px) {
-      #gameCanvas {
-        width: 100vw;
-        height: 50vh;
-      }
-      #leaderboard {
-        width: 95vw;
-      }
+
+    /* Countdown styles */
+    #countdownOverlay {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 100px;
+      font-weight: bold;
+      color: white;
+      background: rgba(0,0,0,0.7);
+      z-index: 10;
     }
   </style>
 </head>
@@ -79,6 +89,7 @@
   <div id="gameContainer">
     <canvas id="gameCanvas" width="600" height="200"></canvas>
     <div id="overlay"></div>
+    <div id="countdownOverlay"></div>
   </div>
   <div id="leaderboard">
     <h2>Leaderboard</h2>
@@ -96,14 +107,14 @@
     "Tymur","Volodymyr","Wania","Zakariya","Zidane","Zoha"
   ];
 
-  // Initialize scores with localStorage memory
+  // Initialize scores
   let scores = {};
   names.forEach(n => {
     const saved = localStorage.getItem(n+"_lastScore");
     scores[n] = saved ? parseInt(saved) : 0;
   });
 
-  // Ask for player name (case-insensitive)
+  // Ask for player name
   let playerName = "";
   while(true){
     let input = prompt("Enter your first name (must match class list):");
@@ -134,31 +145,59 @@
   const canvas = document.getElementById("gameCanvas");
   const ctx = canvas.getContext("2d");
   const overlay = document.getElementById("overlay");
-  let dino = {x:520, y:150, width:40, height:40, dy:0, jumping:false};
+  const countdownOverlay = document.getElementById("countdownOverlay");
+
+  function resizeCanvas(){
+    canvas.width = window.innerWidth; 
+    canvas.height = window.innerHeight * 0.6; 
+  }
+  resizeCanvas();
+  window.addEventListener("resize", resizeCanvas);
+
+  let dino = {x:canvas.width-80, y:150, width:40, height:40, dy:0, jumping:false}; // dino on RIGHT
   let gravity = 0.6;
   let obstacles = [];
   let score = 0;
   let gameOver = false;
   let groundHeight = 20;
   let lastJumpTime = 0;
+  let survivalInterval;
 
-  // Survival points
-  const survivalInterval = setInterval(()=>{
-    if(!gameOver){
-      score +=10;
-      scores[playerName] = score;
-      updateLeaderboard();
+  // Confetti particles
+  let particles = [];
+  function spawnParticles(x, y, color){
+    for(let i=0;i<20;i++){
+      particles.push({
+        x, y,
+        dx:(Math.random()-0.5)*6,
+        dy:(Math.random()-2)*4,
+        size:Math.random()*6+3,
+        color
+      });
     }
-  },3000);
+  }
+  function drawParticles(){
+    particles.forEach((p,i)=>{
+      ctx.fillStyle = p.color;
+      ctx.beginPath();
+      ctx.arc(p.x,p.y,p.size,0,Math.PI*2);
+      ctx.fill();
+      p.x+=p.dx;
+      p.y+=p.dy;
+      p.dy+=0.2;
+      p.size*=0.95;
+      if(p.size<0.5) particles.splice(i,1);
+    });
+  }
 
-  // Random tree obstacles
+  // Obstacles (spawn left → move right)
   function spawnObstacle(){
     if(gameOver) return;
     const size = 40 + Math.random()*30;
     const treeEmojis = ["🌳","🌲","🌴"];
     const emoji = treeEmojis[Math.floor(Math.random()*treeEmojis.length)];
     obstacles.push({
-      x: -size,
+      x: -size,  // start left side
       y: canvas.height-groundHeight-size,
       size,
       emoji
@@ -166,9 +205,8 @@
     const nextTime = 800 + Math.random()*1200;
     setTimeout(spawnObstacle, nextTime);
   }
-  spawnObstacle();
 
-  // Jump controls with cooldown
+  // Jump
   function jump(){
     const now = Date.now();
     if(!dino.jumping && !gameOver && now - lastJumpTime > 200){
@@ -182,9 +220,8 @@
         jump();
       }
     });
-
-  canvas.addEventListener("touchstart", jump);
-  canvas.addEventListener("click", jump);
+  document.addEventListener("touchstart", jump);
+  document.addEventListener("click", jump);
 
   // End game
   function endGame(){
@@ -192,7 +229,6 @@
     overlay.textContent = `GAME OVER!\nYour score: ${score}`;
     overlay.style.visibility = "visible";
     clearInterval(survivalInterval);
-    // Save last score in localStorage
     localStorage.setItem(playerName+"_lastScore", score);
   }
 
@@ -204,11 +240,11 @@
     ctx.fillStyle="#444";
     ctx.fillRect(0,canvas.height-groundHeight,canvas.width,groundHeight);
 
-    // Dino emoji
+    // Dino
     ctx.font = `${dino.height}px Arial`;
     ctx.fillText("🦖", dino.x, dino.y + dino.height-5);
 
-    // Dino physics
+    // Physics
     dino.y += dino.dy;
     dino.dy += gravity;
     if(dino.y > canvas.height-groundHeight-dino.height){
@@ -219,11 +255,11 @@
 
     // Obstacles
     obstacles.forEach((ob,i)=>{
-      ob.x +=5;
+      ob.x += 5; // move RIGHT toward dino
       ctx.font = `${ob.size}px Arial`;
       ctx.fillText(ob.emoji, ob.x, ob.y + ob.size-5);
 
-      // Adjusted collision
+      // Collision detection
       const dinoBox = {x:dino.x+5,y:dino.y+5,width:dino.width-10,height:dino.height-10};
       const obBox = {x:ob.x + ob.size*0.2, y:ob.y + ob.size*0.2, width:ob.size*0.6, height:ob.size*0.6};
       if(dinoBox.x < obBox.x+obBox.width && dinoBox.x+dinoBox.width>obBox.x &&
@@ -231,12 +267,48 @@
         endGame();
       }
 
+      // Remove if off screen right
       if(ob.x - ob.size > canvas.width) obstacles.splice(i,1);
     });
 
+    drawParticles();
+
     if(!gameOver) requestAnimationFrame(gameLoop);
   }
-  gameLoop();
+
+  // Countdown before start
+  function startCountdown(){
+    let count = 3;
+    countdownOverlay.style.visibility = "visible";
+    countdownOverlay.textContent = count;
+
+    let countdownInterval = setInterval(()=>{
+      spawnParticles(canvas.width/2, canvas.height/3, `hsl(${Math.random()*360},80%,60%)`);
+      count--;
+      if(count>0){
+        countdownOverlay.textContent = count;
+      } else if(count===0){
+        countdownOverlay.textContent = "GO!";
+        spawnParticles(canvas.width/2, canvas.height/3, "gold");
+      } else {
+        clearInterval(countdownInterval);
+        countdownOverlay.style.visibility = "hidden";
+
+        // Start game
+        survivalInterval = setInterval(()=>{
+          if(!gameOver){
+            score +=10;
+            scores[playerName] = score;
+            updateLeaderboard();
+          }
+        },3000);
+        spawnObstacle();
+        gameLoop();
+      }
+    },1000);
+  }
+
+  startCountdown();
 </script>
 </body>
 </html>
