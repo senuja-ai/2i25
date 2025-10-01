@@ -1,2 +1,2 @@
-# 2i25.github.io
+# 2i25 dino game
 video game
