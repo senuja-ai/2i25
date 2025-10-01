@@ -104,7 +104,7 @@
 
     // Classmate names
     const names = [
-      "Ahmed","Aimen","Alexandra","Alvina","Anabelle","Anas","Aneeqa","Arta","Asya","Augus",
+      "Andrew","Ahmed","Aimen","Alexandra","Alvina","Anabelle","Anas","Aneeqa","Arta","Asya","Augus",
       "Ayeza","Aymen","Bodhit","Carolina","Daria","Emma","Fatima","Helin","Hussein","Iasmina",
       "Jannatul","Jeet","Jonas","Karina","Karl","Khaliil","Kiarad","Kruthika","Logan","Lohita",
       "Louis","Luca","Laasya","Mahnaz","Milena","Milo","Navid","Parnian","Rinko","Raamish","Sam",
@@ -115,7 +115,7 @@
     // Ask for player name
     let playerName = "";
     while(true){
-      let input = prompt("Enter your first name (must match class list):");
+      let input = prompt("Enter your first name as on lectio or nickname (if this prompt is repeated, try again):");
       if(!input) continue;
       input = input.trim();
       let match = names.find(n => n.toLowerCase() === input.toLowerCase());
@@ -350,4 +350,5 @@
   </script>
 </body>
 </html>
+
 
