@@ -68,8 +68,6 @@
     #scoresList li strong {
       color: darkblue;
     }
-
-    /* Countdown styles */
     #countdownOverlay {
       position: absolute;
       top: 0; left: 0; right: 0; bottom: 0;
@@ -96,219 +94,259 @@
     <ul id="scoresList"></ul>
   </div>
 
-<script>
-  // Classmate names
-  const names = [
-    "Ahmed","Aimen","Alexandra","Alvina","Anabelle","Anas","Aneeqa","Arta","Asya","Augus",
-    "Ayeza","Aymen","Bodhit","Carolina","Daria","Emma","Fatima","Helin","Hussein","Iasmina",
-    "Jannatul","Jeet","Jonas","Karina","Karl","Khaliil","Kiarad","Kruthika","Logan","Lohita",
-    "Louis","Luca","Laasya","Mahnaz","Milena","Milo","Navid","Parnian","Rinko","Raamish","Sam",
-    "Selini","Senuja","Artemis","Shaazil","Sofiia","Soha","Sorena","Spandana","Sunny","Taha",
-    "Tymur","Volodymyr","Wania","Zakariya","Zidane","Zoha"
-  ];
+  <!-- Supabase SDK -->
+  <script src="https://unpkg.com/@supabase/supabase-js"></script>
+  <script>
+    // 🔑 Replace with your project details
+    const SUPABASE_URL = "https://lmuaighljyvczobprzyz.supabase.co";
+    const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxtdWFpZ2hsanl2Y3pvYnByenl6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTkzMjIyODAsImV4cCI6MjA3NDg5ODI4MH0.j2TfU7pYJjo9vkqPNq7U7txN4akTty_-K4Pky_o6kRo";
+    const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-  // Initialize scores
-  let scores = {};
-  names.forEach(n => {
-    const saved = localStorage.getItem(n+"_lastScore");
-    scores[n] = saved ? parseInt(saved) : 0;
-  });
+    // Classmate names
+    const names = [
+      "Ahmed","Aimen","Alexandra","Alvina","Anabelle","Anas","Aneeqa","Arta","Asya","Augus",
+      "Ayeza","Aymen","Bodhit","Carolina","Daria","Emma","Fatima","Helin","Hussein","Iasmina",
+      "Jannatul","Jeet","Jonas","Karina","Karl","Khaliil","Kiarad","Kruthika","Logan","Lohita",
+      "Louis","Luca","Laasya","Mahnaz","Milena","Milo","Navid","Parnian","Rinko","Raamish","Sam",
+      "Selini","Senuja","Artemis","Shaazil","Sofiia","Soha","Sorena","Spandana","Sunny","Taha",
+      "Tymur","Volodymyr","Wania","Zakariya","Zidane","Zoha"
+    ];
 
-  // Ask for player name
-  let playerName = "";
-  while(true){
-    let input = prompt("Enter your first name (must match class list):");
-    if(!input) continue;
-    input = input.trim();
-    let match = names.find(n => n.toLowerCase() === input.toLowerCase());
-    if(match){ playerName = match; break; }
-  }
+    // Ask for player name
+    let playerName = "";
+    while(true){
+      let input = prompt("Enter your first name (must match class list):");
+      if(!input) continue;
+      input = input.trim();
+      let match = names.find(n => n.toLowerCase() === input.toLowerCase());
+      if(match){ playerName = match; break; }
+    }
 
-  // Update leaderboard
-  function updateLeaderboard(){
-    const ul = document.getElementById("scoresList");
-    ul.innerHTML = "";
-    Object.entries(scores)
-      .sort((a,b)=>{
-        if(b[1] === a[1]) return a[0].localeCompare(b[0]);
-        return b[1]-a[1];
-      })
-      .forEach(([name, score])=>{
+    // Save score
+    async function saveScore(name, score){
+      const { error } = await supabaseClient
+        .from("scores")
+        .upsert([{ player: name, score }], { onConflict: ["player"] });
+      if(error) console.error("Save error:", error);
+    }
+
+    // make sure everyones scores are initialized
+    async function initializeScores() {
+      for (const name of names) {
+        // Check if the player already has a row
+        const { data, error } = await supabaseClient
+          .from("scores")
+          .select("*")
+          .eq("player", name)
+          .limit(1);
+        if (error) {
+          console.error("Error fetching score for", name, error);
+          continue;
+        }
+        // If the player has no score yet, insert 0
+        if (!data || data.length === 0) {
+          await supabaseClient
+            .from("scores")
+            .insert([{ player: name, score: 0 }]);
+        }
+      }
+    }
+
+
+    // Fetch scores
+    async function fetchScores(){
+      const { data, error } = await supabaseClient
+        .from("scores")
+        .select("*")
+        .order("score", { ascending: false });
+      if(error){
+        console.error("Fetch error:", error);
+        return [];
+      }
+      return data;
+    }
+
+    // Update leaderboard
+    async function updateLeaderboard(){
+      const ul = document.getElementById("scoresList");
+      ul.innerHTML = "";
+      const scores = await fetchScores();
+      scores.forEach(({ player, score }) => {
         const li = document.createElement("li");
-        li.innerHTML = name===playerName ? `<strong>${name}: ${score}</strong>` : `${name}: ${score}`;
+        li.innerHTML = player === playerName ? `<strong>${player}: ${score}</strong>` : `${player}: ${score}`;
         ul.appendChild(li);
       });
-  }
-  updateLeaderboard();
+    }
+    updateLeaderboard();
 
-  // Game setup
-  const canvas = document.getElementById("gameCanvas");
-  const ctx = canvas.getContext("2d");
-  const overlay = document.getElementById("overlay");
-  const countdownOverlay = document.getElementById("countdownOverlay");
+    // Subscribe to real-time changes
+    supabaseClient
+      .channel("leaderboard")
+      .on("postgres_changes", { event: "*", schema: "public", table: "scores" },
+        (payload) => updateLeaderboard()
+      )
+      .subscribe();
 
-  function resizeCanvas(){
-    canvas.width = window.innerWidth; 
-    canvas.height = window.innerHeight * 0.6; 
-  }
-  resizeCanvas();
-  window.addEventListener("resize", resizeCanvas);
+    // Game setup
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+    const overlay = document.getElementById("overlay");
+    const countdownOverlay = document.getElementById("countdownOverlay");
 
-  let dino = {x:canvas.width-80, y:150, width:40, height:40, dy:0, jumping:false}; // dino on RIGHT
-  let gravity = 0.6;
-  let obstacles = [];
-  let score = 0;
-  let gameOver = false;
-  let groundHeight = 20;
-  let lastJumpTime = 0;
-  let survivalInterval;
+    function resizeCanvas(){
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight * 0.6;
+    }
+    resizeCanvas();
+    window.addEventListener("resize", resizeCanvas);
 
-  // Confetti particles
-  let particles = [];
-  function spawnParticles(x, y, color){
-    for(let i=0;i<20;i++){
-      particles.push({
-        x, y,
-        dx:(Math.random()-0.5)*6,
-        dy:(Math.random()-2)*4,
-        size:Math.random()*6+3,
-        color
+    let dino = {x:canvas.width-80, y:150, width:40, height:40, dy:0, jumping:false};
+    let gravity = 0.6;
+    let obstacles = [];
+    let score = 0;
+    let gameOver = false;
+    let groundHeight = 20;
+    let lastJumpTime = 0;
+    let survivalInterval;
+
+    // Particles
+    let particles = [];
+    function spawnParticles(x, y, color){
+      for(let i=0;i<20;i++){
+        particles.push({
+          x, y,
+          dx:(Math.random()-0.5)*6,
+          dy:(Math.random()-2)*4,
+          size:Math.random()*6+3,
+          color
+        });
+      }
+    }
+    function drawParticles(){
+      particles.forEach((p,i)=>{
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x,p.y,p.size,0,Math.PI*2);
+        ctx.fill();
+        p.x+=p.dx;
+        p.y+=p.dy;
+        p.dy+=0.2;
+        p.size*=0.95;
+        if(p.size<0.5) particles.splice(i,1);
       });
     }
-  }
-  function drawParticles(){
-    particles.forEach((p,i)=>{
-      ctx.fillStyle = p.color;
-      ctx.beginPath();
-      ctx.arc(p.x,p.y,p.size,0,Math.PI*2);
-      ctx.fill();
-      p.x+=p.dx;
-      p.y+=p.dy;
-      p.dy+=0.2;
-      p.size*=0.95;
-      if(p.size<0.5) particles.splice(i,1);
-    });
-  }
 
-  // Obstacles (spawn left → move right)
-  function spawnObstacle(){
-    if(gameOver) return;
-    const size = 40 + Math.random()*30;
-    const treeEmojis = ["🌳","🌲","🌴"];
-    const emoji = treeEmojis[Math.floor(Math.random()*treeEmojis.length)];
-    obstacles.push({
-      x: -size,  // start left side
-      y: canvas.height-groundHeight-size,
-      size,
-      emoji
-    });
-    const nextTime = 800 + Math.random()*1200;
-    setTimeout(spawnObstacle, nextTime);
-  }
-
-  // Jump
-  function jump(){
-    const now = Date.now();
-    if(!dino.jumping && !gameOver && now - lastJumpTime > 200){
-      dino.dy = -12;
-      dino.jumping = true;
-      lastJumpTime = now;
+    // Obstacles
+    function spawnObstacle(){
+      if(gameOver) return;
+      const size = 40 + Math.random()*30;
+      const treeEmojis = ["🌳","🌲","🌴"];
+      const emoji = treeEmojis[Math.floor(Math.random()*treeEmojis.length)];
+      obstacles.push({
+        x: -size,
+        y: canvas.height-groundHeight-size,
+        size,
+        emoji
+      });
+      const nextTime = 800 + Math.random()*1200;
+      setTimeout(spawnObstacle, nextTime);
     }
-  }
-  document.addEventListener("keydown", e => {
+
+    // Jump
+    function jump(){
+      const now = Date.now();
+      if(!dino.jumping && !gameOver && now - lastJumpTime > 200){
+        dino.dy = -12;
+        dino.jumping = true;
+        lastJumpTime = now;
+      }
+    }
+    document.addEventListener("keydown", e => {
       if (e.code === "Space" || e.code === "ArrowUp" || e.code === "KeyW") {
         jump();
       }
     });
-  document.addEventListener("touchstart", jump);
-  document.addEventListener("click", jump);
+    document.addEventListener("touchstart", jump);
+    document.addEventListener("click", jump);
 
-  // End game
-  function endGame(){
-    gameOver = true;
-    overlay.textContent = `GAME OVER!\nYour score: ${score}`;
-    overlay.style.visibility = "visible";
-    clearInterval(survivalInterval);
-    localStorage.setItem(playerName+"_lastScore", score);
-  }
-
-  // Game loop
-  function gameLoop(){
-    ctx.clearRect(0,0,canvas.width,canvas.height);
-
-    // Ground
-    ctx.fillStyle="#444";
-    ctx.fillRect(0,canvas.height-groundHeight,canvas.width,groundHeight);
-
-    // Dino
-    ctx.font = `${dino.height}px Arial`;
-    ctx.fillText("🦖", dino.x, dino.y + dino.height-5);
-
-    // Physics
-    dino.y += dino.dy;
-    dino.dy += gravity;
-    if(dino.y > canvas.height-groundHeight-dino.height){
-      dino.y = canvas.height-groundHeight-dino.height;
-      dino.dy = 0;
-      dino.jumping = false;
+    // End game
+    function endGame(){
+      gameOver = true;
+      overlay.textContent = `GAME OVER!\nYour score: ${score}`;
+      overlay.style.visibility = "visible";
+      clearInterval(survivalInterval);
+      saveScore(playerName, score);
     }
 
-    // Obstacles
-    obstacles.forEach((ob,i)=>{
-      ob.x += 5; // move RIGHT toward dino
-      ctx.font = `${ob.size}px Arial`;
-      ctx.fillText(ob.emoji, ob.x, ob.y + ob.size-5);
+    // Game loop
+    function gameLoop(){
+      ctx.clearRect(0,0,canvas.width,canvas.height);
 
-      // Collision detection
-      const dinoBox = {x:dino.x+5,y:dino.y+5,width:dino.width-10,height:dino.height-10};
-      const obBox = {x:ob.x + ob.size*0.2, y:ob.y + ob.size*0.2, width:ob.size*0.6, height:ob.size*0.6};
-      if(dinoBox.x < obBox.x+obBox.width && dinoBox.x+dinoBox.width>obBox.x &&
-         dinoBox.y < obBox.y+obBox.height && dinoBox.y+dinoBox.height>obBox.y){
-        endGame();
+      ctx.fillStyle="#444";
+      ctx.fillRect(0,canvas.height-groundHeight,canvas.width,groundHeight);
+
+      ctx.font = `${dino.height}px Arial`;
+      ctx.fillText("🦖", dino.x, dino.y + dino.height-5);
+
+      dino.y += dino.dy;
+      dino.dy += gravity;
+      if(dino.y > canvas.height-groundHeight-dino.height){
+        dino.y = canvas.height-groundHeight-dino.height;
+        dino.dy = 0;
+        dino.jumping = false;
       }
 
-      // Remove if off screen right
-      if(ob.x - ob.size > canvas.width) obstacles.splice(i,1);
-    });
+      obstacles.forEach((ob,i)=>{
+        ob.x += 5;
+        ctx.font = `${ob.size}px Arial`;
+        ctx.fillText(ob.emoji, ob.x, ob.y + ob.size-5);
 
-    drawParticles();
+        const dinoBox = {x:dino.x+5,y:dino.y+5,width:dino.width-10,height:dino.height-10};
+        const obBox = {x:ob.x + ob.size*0.2, y:ob.y + ob.size*0.2, width:ob.size*0.6, height:ob.size*0.6};
+        if(dinoBox.x < obBox.x+obBox.width && dinoBox.x+dinoBox.width>obBox.x &&
+           dinoBox.y < obBox.y+obBox.height && dinoBox.y+dinoBox.height>obBox.y){
+          endGame();
+        }
+        if(ob.x - ob.size > canvas.width) obstacles.splice(i,1);
+      });
 
-    if(!gameOver) requestAnimationFrame(gameLoop);
-  }
+      drawParticles();
 
-  // Countdown before start
-  function startCountdown(){
-    let count = 3;
-    countdownOverlay.style.visibility = "visible";
-    countdownOverlay.textContent = count;
+      if(!gameOver) requestAnimationFrame(gameLoop);
+    }
 
-    let countdownInterval = setInterval(()=>{
-      spawnParticles(canvas.width/2, canvas.height/3, `hsl(${Math.random()*360},80%,60%)`);
-      count--;
-      if(count>0){
-        countdownOverlay.textContent = count;
-      } else if(count===0){
-        countdownOverlay.textContent = "GO!";
-        spawnParticles(canvas.width/2, canvas.height/3, "gold");
-      } else {
-        clearInterval(countdownInterval);
-        countdownOverlay.style.visibility = "hidden";
+    // Countdown
+    function startCountdown(){
+      let count = 3;
+      countdownOverlay.style.visibility = "visible";
+      countdownOverlay.textContent = count;
 
-        // Start game
-        survivalInterval = setInterval(()=>{
-          if(!gameOver){
-            score +=10;
-            scores[playerName] = score;
-            updateLeaderboard();
-          }
-        },3000);
-        spawnObstacle();
-        gameLoop();
-      }
-    },1000);
-  }
+      let countdownInterval = setInterval(()=>{
+        spawnParticles(canvas.width/2, canvas.height/3, `hsl(${Math.random()*360},80%,60%)`);
+        count--;
+        if(count>0){
+          countdownOverlay.textContent = count;
+        } else if(count===0){
+          countdownOverlay.textContent = "GO!";
+          spawnParticles(canvas.width/2, canvas.height/3, "gold");
+        } else {
+          clearInterval(countdownInterval);
+          countdownOverlay.style.visibility = "hidden";
 
-  startCountdown();
-</script>
+          survivalInterval = setInterval(()=>{
+            if(!gameOver){
+              score +=10;
+              saveScore(playerName, score);
+              updateLeaderboard();
+            }
+          },3000);
+          spawnObstacle();
+          gameLoop();
+        }
+      },1000);
+    }
+
+    startCountdown();
+  </script>
 </body>
 </html>
