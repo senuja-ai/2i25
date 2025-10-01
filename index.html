@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>🦖 The 2i Dino Survival Game (by senuja)</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    #gameContainer {
+      position: relative;
+      border: 3px solid black;
+      background: #e6e6e6;
+      margin-top: 10px;
+    }
+    #gameCanvas {
+      display: block;
+      background: linear-gradient(#aee1f9, #f1f1f1);
+    }
+    #overlay {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0,0,0,0.6);
+      color: white;
+      font-size: 32px;
+      visibility: hidden;
+      text-align: center;
+    }
+    #leaderboard {
+      width: 100%;
+      max-width: 600px;
+      border: 3px solid black;
+      margin-top: 10px;
+      background: #fdfdfd;
+    }
+    #leaderboard h2 {
+      text-align: center;
+      margin: 8px 0;
+      border-bottom: 2px solid black;
+      padding-bottom: 4px;
+    }
+    #scoresList {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    }
+    #scoresList li {
+      border: 1px solid #ccc;
+      margin: 2px;
+      padding: 4px;
+      text-align: center;
+      font-size: 14px;
+      background: #f9f9f9;
+    }
+    #scoresList li strong {
+      color: darkblue;
+    }
+    @media (max-width: 700px) {
+      #gameCanvas {
+        width: 100vw;
+        height: 50vh;
+      }
+      #leaderboard {
+        width: 95vw;
+      }
+    }
+  </style>
+</head>
+<body>
+  <h1>🦖 Dino Survival Game</h1>
+  <div id="gameContainer">
+    <canvas id="gameCanvas" width="600" height="200"></canvas>
+    <div id="overlay"></div>
+  </div>
+  <div id="leaderboard">
+    <h2>Leaderboard</h2>
+    <ul id="scoresList"></ul>
+  </div>
+
+<script>
+  // Classmate names
+  const names = [
+    "Ahmed","Aimen","Alexandra","Alvina","Anabelle","Anas","Aneeqa","Arta","Asya","Augus",
+    "Ayeza","Aymen","Bodhit","Carolina","Daria","Emma","Fatima","Helin","Hussein","Iasmina",
+    "Jannatul","Jeet","Jonas","Karina","Karl","Khaliil","Kiarad","Kruthika","Logan","Lohita",
+    "Louis","Luca","Laasya","Mahnaz","Milena","Milo","Navid","Parnian","Rinko","Raamish","Sam",
+    "Selini","Senuja","Artemis","Shaazil","Sofiia","Soha","Sorena","Spandana","Sunny","Taha",
+    "Tymur","Volodymyr","Wania","Zakariya","Zidane","Zoha"
+  ];
+
+  // Initialize scores with localStorage memory
+  let scores = {};
+  names.forEach(n => {
+    const saved = localStorage.getItem(n+"_lastScore");
+    scores[n] = saved ? parseInt(saved) : 0;
+  });
+
+  // Ask for player name (case-insensitive)
+  let playerName = "";
+  while(true){
+    let input = prompt("Enter your first name (must match class list):");
+    if(!input) continue;
+    input = input.trim();
+    let match = names.find(n => n.toLowerCase() === input.toLowerCase());
+    if(match){ playerName = match; break; }
+  }
+
+  // Update leaderboard
+  function updateLeaderboard(){
+    const ul = document.getElementById("scoresList");
+    ul.innerHTML = "";
+    Object.entries(scores)
+      .sort((a,b)=>{
+        if(b[1] === a[1]) return a[0].localeCompare(b[0]);
+        return b[1]-a[1];
+      })
+      .forEach(([name, score])=>{
+        const li = document.createElement("li");
+        li.innerHTML = name===playerName ? `<strong>${name}: ${score}</strong>` : `${name}: ${score}`;
+        ul.appendChild(li);
+      });
+  }
+  updateLeaderboard();
+
+  // Game setup
+  const canvas = document.getElementById("gameCanvas");
+  const ctx = canvas.getContext("2d");
+  const overlay = document.getElementById("overlay");
+  let dino = {x:520, y:150, width:40, height:40, dy:0, jumping:false};
+  let gravity = 0.6;
+  let obstacles = [];
+  let score = 0;
+  let gameOver = false;
+  let groundHeight = 20;
+  let lastJumpTime = 0;
+
+  // Survival points
+  const survivalInterval = setInterval(()=>{
+    if(!gameOver){
+      score +=10;
+      scores[playerName] = score;
+      updateLeaderboard();
+    }
+  },3000);
+
+  // Random tree obstacles
+  function spawnObstacle(){
+    if(gameOver) return;
+    const size = 40 + Math.random()*30;
+    const treeEmojis = ["🌳","🌲","🌴"];
+    const emoji = treeEmojis[Math.floor(Math.random()*treeEmojis.length)];
+    obstacles.push({
+      x: -size,
+      y: canvas.height-groundHeight-size,
+      size,
+      emoji
+    });
+    const nextTime = 800 + Math.random()*1200;
+    setTimeout(spawnObstacle, nextTime);
+  }
+  spawnObstacle();
+
+  // Jump controls with cooldown
+  function jump(){
+    const now = Date.now();
+    if(!dino.jumping && !gameOver && now - lastJumpTime > 200){
+      dino.dy = -12;
+      dino.jumping = true;
+      lastJumpTime = now;
+    }
+  }
+  document.addEventListener("keydown", e => {
+      if (e.code === "Space" || e.code === "ArrowUp" || e.code === "KeyW") {
+        jump();
+      }
+    });
+
+  canvas.addEventListener("touchstart", jump);
+  canvas.addEventListener("click", jump);
+
+  // End game
+  function endGame(){
+    gameOver = true;
+    overlay.textContent = `GAME OVER!\nYour score: ${score}`;
+    overlay.style.visibility = "visible";
+    clearInterval(survivalInterval);
+    // Save last score in localStorage
+    localStorage.setItem(playerName+"_lastScore", score);
+  }
+
+  // Game loop
+  function gameLoop(){
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+
+    // Ground
+    ctx.fillStyle="#444";
+    ctx.fillRect(0,canvas.height-groundHeight,canvas.width,groundHeight);
+
+    // Dino emoji
+    ctx.font = `${dino.height}px Arial`;
+    ctx.fillText("🦖", dino.x, dino.y + dino.height-5);
+
+    // Dino physics
+    dino.y += dino.dy;
+    dino.dy += gravity;
+    if(dino.y > canvas.height-groundHeight-dino.height){
+      dino.y = canvas.height-groundHeight-dino.height;
+      dino.dy = 0;
+      dino.jumping = false;
+    }
+
+    // Obstacles
+    obstacles.forEach((ob,i)=>{
+      ob.x +=5;
+      ctx.font = `${ob.size}px Arial`;
+      ctx.fillText(ob.emoji, ob.x, ob.y + ob.size-5);
+
+      // Adjusted collision
+      const dinoBox = {x:dino.x+5,y:dino.y+5,width:dino.width-10,height:dino.height-10};
+      const obBox = {x:ob.x + ob.size*0.2, y:ob.y + ob.size*0.2, width:ob.size*0.6, height:ob.size*0.6};
+      if(dinoBox.x < obBox.x+obBox.width && dinoBox.x+dinoBox.width>obBox.x &&
+         dinoBox.y < obBox.y+obBox.height && dinoBox.y+dinoBox.height>obBox.y){
+        endGame();
+      }
+
+      if(ob.x - ob.size > canvas.width) obstacles.splice(i,1);
+    });
+
+    if(!gameOver) requestAnimationFrame(gameLoop);
+  }
+  gameLoop();
+</script>
+</body>
+</html>
