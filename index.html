@@ -233,8 +233,8 @@
       for(let i=0;i<40;i++){
         particles.push({
           x, y,
-          dx:(Math.random()-0.5)*9,
-          dy:(Math.random()-2)*6,
+          dx:(Math.random()-0.5)*6,
+          dy:(Math.random()-2)*4,
           size:Math.random()*20+3,
           color
         });
@@ -253,6 +253,38 @@
         if(p.size<0.5) particles.splice(i,1);
       });
     }
+
+    function spawnCornerConfetti() {
+  const corners = [
+    { x: 0, y: 0 },                              // top-left
+    { x: canvas.width, y: 0 },                   // top-right
+    { x: 0, y: canvas.height },                  // bottom-left
+    { x: canvas.width, y: canvas.height }        // bottom-right
+  ];
+  
+  const centerX = canvas.width / 2;
+  const centerY = canvas.height / 2;
+
+  for (const corner of corners) {
+    for (let i = 0; i < 25; i++) {   // 25 per corner
+      const angle = Math.atan2(centerY - corner.y, centerX - corner.x);
+      const speed = 4 + Math.random() * 3;
+
+      // pick a random rainbow color
+      const hue = Math.floor(Math.random() * 360);
+      const color = `hsl(${hue}, 90%, 60%)`;
+
+      particles.push({
+        x: corner.x,
+        y: corner.y,
+        dx: Math.cos(angle) * speed + (Math.random() - 0.5) * 2,
+        dy: Math.sin(angle) * speed + (Math.random() - 0.5) * 2,
+        size: Math.random() * 8 + 4,
+        color
+      });
+    }
+  }
+}
 
     // Obstacles
     function spawnObstacle(){
@@ -316,6 +348,9 @@
 
       ctx.font = `${dino.height}px Arial`;
       ctx.fillText("🦖", dino.x, dino.y + dino.height-5);
+      ctx.fillStyle = "black";
+      ctx.font = "24px Arial";
+      ctx.fillText(`Score: ${score}`, 20, 40);
 
       dino.y += dino.dy;
       dino.dy += gravity;
@@ -351,7 +386,7 @@
       countdownOverlay.textContent = count;
 
       let countdownInterval = setInterval(()=>{
-        spawnParticles(canvas.width/2, canvas.height/3, `hsl(${Math.random()*360},80%,60%)`);
+        spawnCornerConfetti();
         count--;
         if(count>0){
           countdownOverlay.textContent = count;
@@ -377,18 +412,7 @@
 
     startCountdown();
     
-    ctx.fillStyle = "black";
-    ctx.font = "24px Arial";
-    ctx.fillText(`Score: ${score}`, 20, 40);
-
   </script>
 </body>
 </html>
-
-
-
-
-
-
-
 
