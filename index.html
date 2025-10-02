@@ -79,6 +79,32 @@
       color: white;
       background: rgba(0,0,0,0.7);
       z-index: 10;
+      visibility: hidden;
+    }
+    #nameOverlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 200;
+    }
+    #nameOverlay div {
+      background: white;
+      padding: 20px;
+      border: 3px solid black;
+      text-align: center;
+    }
+    #nameOverlay input {
+      padding: 8px;
+      font-size: 16px;
+    }
+    #nameOverlay button {
+      padding: 8px 16px;
+      font-size: 16px;
+      margin-top: 10px;
+      cursor: pointer;
     }
   </style>
 </head>
@@ -92,6 +118,17 @@
   <div id="leaderboard">
     <h2>Leaderboard</h2>
     <ul id="scoresList"></ul>
+  </div>
+
+  <!-- Name input overlay -->
+  <div id="nameOverlay">
+    <div>
+      <h2>Enter your first name as on lectio (or nickname)</h2>
+      <input id="nameInput" type="text" placeholder="Your name...">
+      <br>
+      <button id="startBtn">Start Game</button>
+      <p id="nameError" style="color: red; display: none;">Name not recognized. Try again.</p>
+    </div>
   </div>
 
   <!-- Supabase SDK -->
@@ -112,64 +149,67 @@
       "Tymur","Volodymyr","Wania","Zakariya","Zidane","Zoha"
     ];
 
-    // Ask for player name
-    let playerName = "";
-    while(true){
-      let input = prompt("Enter your first name as on lectio or nickname (if this prompt is repeated, try again):");
-      if(!input) continue;
-      input = input.trim();
-      let match = names.find(n => n.toLowerCase() === input.toLowerCase());
-      if(match){ playerName = match; break; }
-    }
+    let playerName = ""; 
+
+    function handleNameSubmit() {
+  const input = document.getElementById("nameInput").value.trim();
+  const match = names.find(n => n.toLowerCase() === input.toLowerCase());
+
+  if (match) {
+    playerName = match;
+    document.getElementById("nameOverlay").style.display = "none"; // hide overlay
+    startCountdown(); 
+  } else {
+    document.getElementById("nameError").style.display = "block";
+  }
+}
+
+    //Event listener for name submission
+    document.getElementById("startBtn").addEventListener("click", handleNameSubmit);
+    document.getElementById("nameInput").addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        handleNameSubmit();
+      }
+    });
+
 
     // Save score
     async function saveScore(name, score) {
-    // Fetch current score
-    const { data, error: fetchError } = await supabaseClient
-      .from("scores")
-      .select("score")
-      .eq("player", name)
-      .single();
-
-    if (fetchError && fetchError.code !== "PGRST116") { // ignore "not found"
-      console.error("Fetch error:", fetchError);
-      return;
-    }
-
-    const currentScore = data ? data.score : 0;
-    // Only update if new score is higher
-    if (score > currentScore) {
-      const { error: updateError } = await supabaseClient
+      const { data, error: fetchError } = await supabaseClient
         .from("scores")
-        .upsert([{ player: name, score }], { onConflict: ["player"] });
+        .select("score")
+        .eq("player", name)
+        .single();
 
-    if (updateError) console.error("Save error:", updateError);
+      if (fetchError && fetchError.code !== "PGRST116") { 
+        console.error("Fetch error:", fetchError);
+        return;
+      }
+
+      const currentScore = data ? data.score : 0;
+      if (score > currentScore) {
+        const { error: updateError } = await supabaseClient
+          .from("scores")
+          .upsert([{ player: name, score }], { onConflict: ["player"] });
+
+        if (updateError) console.error("Save error:", updateError);
       }
     }
 
-
-    // make sure everyones scores are initialized
+    // Initialize scores for all
     async function initializeScores() {
       for (const name of names) {
-        // Check if the player already has a row
         const { data, error } = await supabaseClient
           .from("scores")
           .select("*")
           .eq("player", name)
           .limit(1);
-        if (error) {
-          console.error("Error fetching score for", name, error);
-          continue;
-        }
-        // If the player has no score yet, insert 0
+        if (error) continue;
         if (!data || data.length === 0) {
-          await supabaseClient
-            .from("scores")
-            .insert([{ player: name, score: 0 }]);
+          await supabaseClient.from("scores").insert([{ player: name, score: 0 }]);
         }
       }
     }
-
 
     // Fetch scores
     async function fetchScores(){
@@ -197,11 +237,10 @@
     }
     updateLeaderboard();
 
-    // Subscribe to real-time changes
     supabaseClient
       .channel("leaderboard")
       .on("postgres_changes", { event: "*", schema: "public", table: "scores" },
-        (payload) => updateLeaderboard()
+        () => updateLeaderboard()
       )
       .subscribe();
 
@@ -255,36 +294,33 @@
     }
 
     function spawnCornerConfetti() {
-  const corners = [
-    { x: 0, y: 0 },                              // top-left
-    { x: canvas.width, y: 0 },                   // top-right
-    { x: 0, y: canvas.height },                  // bottom-left
-    { x: canvas.width, y: canvas.height }        // bottom-right
-  ];
-  
-  const centerX = canvas.width / 2;
-  const centerY = canvas.height / 2;
+      const corners = [
+        { x: 0, y: 0 },
+        { x: canvas.width, y: 0 },
+        { x: 0, y: canvas.height },
+        { x: canvas.width, y: canvas.height }
+      ];
+      const centerX = canvas.width / 2;
+      const centerY = canvas.height / 2;
 
-  for (const corner of corners) {
-    for (let i = 0; i < 25; i++) {   // 25 per corner
-      const angle = Math.atan2(centerY - corner.y, centerX - corner.x);
-      const speed = 4 + Math.random() * 3;
+      for (const corner of corners) {
+        for (let i = 0; i < 25; i++) {
+          const angle = Math.atan2(centerY - corner.y, centerX - corner.x);
+          const speed = 4 + Math.random() * 3;
+          const hue = Math.floor(Math.random() * 360);
+          const color = `hsl(${hue}, 90%, 60%)`;
 
-      // pick a random rainbow color
-      const hue = Math.floor(Math.random() * 360);
-      const color = `hsl(${hue}, 90%, 60%)`;
-
-      particles.push({
-        x: corner.x,
-        y: corner.y,
-        dx: Math.cos(angle) * speed + (Math.random() - 0.5) * 2,
-        dy: Math.sin(angle) * speed + (Math.random() - 0.5) * 2,
-        size: Math.random() * 8 + 4,
-        color
-      });
+          particles.push({
+            x: corner.x,
+            y: corner.y,
+            dx: Math.cos(angle) * speed + (Math.random() - 0.5) * 2,
+            dy: Math.sin(angle) * speed + (Math.random() - 0.5) * 2,
+            size: Math.random() * 8 + 4,
+            color
+          });
+        }
+      }
     }
-  }
-}
 
     // Obstacles
     function spawnObstacle(){
@@ -321,23 +357,20 @@
 
     // End game
     async function endGame(){
-    gameOver = true;
-    // Fetch their best score
-    const { data, error } = await supabaseClient
-      .from("scores")
-      .select("score")
-      .eq("player", playerName)
-      .single();
+      gameOver = true;
+      const { data } = await supabaseClient
+        .from("scores")
+        .select("score")
+        .eq("player", playerName)
+        .single();
 
-    const bestScore = data ? data.score : score;
+      const bestScore = data ? data.score : score;
+      overlay.textContent = `GAME OVER! | Your score: ${score} | Best score: ${bestScore} | (reload page to try again!)`;
+      overlay.style.visibility = "visible";
 
-    overlay.textContent = `GAME OVER! | Your score: ${score} | Best score: ${bestScore} | (reload page to try again!)`;
-    overlay.style.visibility = "visible";
-
-    clearInterval(survivalInterval);
-    await saveScore(playerName, score);
+      clearInterval(survivalInterval);
+      await saveScore(playerName, score);
     }
-
 
     // Game loop
     function gameLoop(){
@@ -409,10 +442,6 @@
         }
       },1000);
     }
-
-    startCountdown();
-    
   </script>
 </body>
 </html>
-
