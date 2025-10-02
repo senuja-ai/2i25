@@ -123,12 +123,30 @@
     }
 
     // Save score
-    async function saveScore(name, score){
-      const { error } = await supabaseClient
+    async function saveScore(name, score) {
+    // Fetch current score
+    const { data, error: fetchError } = await supabaseClient
+      .from("scores")
+      .select("score")
+      .eq("player", name)
+      .single();
+
+    if (fetchError && fetchError.code !== "PGRST116") { // ignore "not found"
+      console.error("Fetch error:", fetchError);
+      return;
+    }
+
+    const currentScore = data ? data.score : 0;
+    // Only update if new score is higher
+    if (score > currentScore) {
+      const { error: updateError } = await supabaseClient
         .from("scores")
         .upsert([{ player: name, score }], { onConflict: ["player"] });
-      if(error) console.error("Save error:", error);
+
+    if (updateError) console.error("Save error:", updateError);
+      }
     }
+
 
     // make sure everyones scores are initialized
     async function initializeScores() {
@@ -270,13 +288,25 @@
     document.addEventListener("click", jump);
 
     // End game
-    function endGame(){
-      gameOver = true;
-      overlay.textContent = `GAME OVER!\nYour score: ${score}`;
-      overlay.style.visibility = "visible";
-      clearInterval(survivalInterval);
-      saveScore(playerName, score);
+    async function endGame(){
+    gameOver = true;
+
+    // Fetch their best score
+    const { data, error } = await supabaseClient
+      .from("scores")
+      .select("score")
+      .eq("player", playerName)
+      .single();
+
+    const bestScore = data ? data.score : score;
+
+    overlay.textContent = `GAME OVER!\nYour score: ${score}\nBest score: ${bestScore}\n(reload page to try again!)`;
+    overlay.style.visibility = "visible";
+
+    clearInterval(survivalInterval);
+    await saveScore(playerName, score);
     }
+
 
     // Game loop
     function gameLoop(){
@@ -350,5 +380,6 @@
   </script>
 </body>
 </html>
+
 
 
