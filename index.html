@@ -290,7 +290,6 @@
     // End game
     async function endGame(){
     gameOver = true;
-
     // Fetch their best score
     const { data, error } = await supabaseClient
       .from("scores")
@@ -300,7 +299,7 @@
 
     const bestScore = data ? data.score : score;
 
-    overlay.textContent = `GAME OVER!\nYour score: ${score}\nBest score: ${bestScore}\n(reload page to try again!)`;
+    overlay.textContent = `GAME OVER!<br>Your score: ${score}<br>Best score: ${bestScore}<br>(reload page to try again!)`;
     overlay.style.visibility = "visible";
 
     clearInterval(survivalInterval);
@@ -380,6 +379,7 @@
   </script>
 </body>
 </html>
+
 
 
 
